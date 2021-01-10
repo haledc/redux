@@ -88,6 +88,7 @@ export default function createStore<
       throw new Error('Expected the enhancer to be a function.')
     }
 
+    // 将原来的 createStore 作为参数传入到 enhancer 中
     return enhancer(createStore)(
       reducer,
       preloadedState as PreloadedState<S>
@@ -98,10 +99,15 @@ export default function createStore<
     throw new Error('Expected the reducer to be a function.')
   }
 
+  // ! 记录当前的 reducer，因为 replaceReducer 会修改 reducer 的内容
   let currentReducer = reducer
+  // ! 记录当前的 state
   let currentState = preloadedState as S
+  // ! 声明 listeners 数组，这个数组用于记录在 subscribe 中订阅的事件
   let currentListeners: (() => void)[] | null = []
+  // ! nextListeners 是 currentListeners 的快照
   let nextListeners = currentListeners
+  // ! 该变量用于记录当前是否正在进行 dispatch
   let isDispatching = false
 
   /**
@@ -110,6 +116,7 @@ export default function createStore<
    *
    * This prevents any bugs around consumers calling
    * subscribe/unsubscribe in the middle of a dispatch.
+   * ! 该方法用于确认快照是 currentListeners 的副本，而不是 currentListeners 本身
    */
   function ensureCanMutateNextListeners() {
     if (nextListeners === currentListeners) {
@@ -153,6 +160,7 @@ export default function createStore<
    * the listener is called. It is, however, guaranteed that all subscribers
    * registered before the `dispatch()` started will be called with the latest
    * state by the time it exits.
+   * ! subscribe 订阅方法，它将会定义 dispatch 最后执行的 listeners 数组的内容
    *
    * @param listener A callback to be invoked on every dispatch.
    * @returns A function to remove this change listener.
@@ -162,6 +170,7 @@ export default function createStore<
       throw new Error('Expected the listener to be a function.')
     }
 
+    // ! 禁止在 reducer 中调用 subscribe
     if (isDispatching) {
       throw new Error(
         'You may not call store.subscribe() while the reducer is executing. ' +
@@ -171,11 +180,16 @@ export default function createStore<
       )
     }
 
+    // ! 该变量用于防止调用多次 unsubscribe 函数
     let isSubscribed = true
 
+    // ! 确保 nextListeners 与 currentListeners 不指向同一个引用
     ensureCanMutateNextListeners()
+
+    // ! 注册监听函数
     nextListeners.push(listener)
 
+    // ! 返回取消订阅当前 listener 的方法
     return function unsubscribe() {
       if (!isSubscribed) {
         return
@@ -192,6 +206,7 @@ export default function createStore<
 
       ensureCanMutateNextListeners()
       const index = nextListeners.indexOf(listener)
+      // ! 将当前的 listener 从 nextListeners 数组中删除
       nextListeners.splice(index, 1)
       currentListeners = null
     }
@@ -229,7 +244,7 @@ export default function createStore<
           'Use custom middleware for async actions.'
       )
     }
-
+    // ! 约束 action 中必须有 type 属性作为 action 的唯一标识
     if (typeof action.type === 'undefined') {
       throw new Error(
         'Actions may not have an undefined "type" property. ' +
@@ -237,17 +252,22 @@ export default function createStore<
       )
     }
 
+    // ! 若当前已经位于 dispatch 的流程中，则不允许再度发起 dispatch（禁止套娃）
     if (isDispatching) {
       throw new Error('Reducers may not dispatch actions.')
     }
 
     try {
+      // ! 执行 reducer 前，先"上锁"，标记当前已经存在 dispatch 执行流程
       isDispatching = true
+      // ! 调用 reducer，计算新的 state
       currentState = currentReducer(currentState, action)
     } finally {
+      // ! 执行结束后，把"锁"打开，允许再次进行 dispatch
       isDispatching = false
     }
 
+    // ! 触发订阅
     const listeners = (currentListeners = nextListeners)
     for (let i = 0; i < listeners.length; i++) {
       const listener = listeners[i]
@@ -263,6 +283,7 @@ export default function createStore<
    * You might need this if your app implements code splitting and you want to
    * load some of the reducers dynamically. You might also need this if you
    * implement a hot reloading mechanism for Redux.
+   * ! replaceReducer 可以更改当前的 reducer
    *
    * @param nextReducer The reducer for the store to use instead.
    * @returns The same store instance with a new reducer in place.
@@ -338,8 +359,10 @@ export default function createStore<
   // When a store is created, an "INIT" action is dispatched so that every
   // reducer returns their initial state. This effectively populates
   // the initial state tree.
+  // ! 初始化 state 当派发一个 type 为 ActionTypes.INIT 的 action，每个 reducer 都会返回它的初始值
   dispatch({ type: ActionTypes.INIT } as A)
 
+  // ! 将定义的方法包裹在 store 对象里返回
   const store = ({
     dispatch: dispatch as Dispatch<A>,
     subscribe,

@@ -60,10 +60,12 @@ export default function applyMiddleware<Ext, S = any>(
 export default function applyMiddleware(
   ...middlewares: Middleware[]
 ): StoreEnhancer<any> {
+  // ! 它返回的是一个接收 createStore 为入参的函数
   return (createStore: StoreEnhancerStoreCreator) => <S, A extends AnyAction>(
     reducer: Reducer<S, A>,
     preloadedState?: PreloadedState<S>
   ) => {
+    // ! 首先调用 createStore，创建一个 store
     const store = createStore(reducer, preloadedState)
     let dispatch: Dispatch = () => {
       throw new Error(
@@ -72,13 +74,18 @@ export default function applyMiddleware(
       )
     }
 
+    // ! middlewareAPI 是中间件的入参
     const middlewareAPI: MiddlewareAPI = {
       getState: store.getState,
       dispatch: (action, ...args) => dispatch(action, ...args)
     }
+    // ! 遍历中间件数组，调用每个中间件，并且传入 middlewareAPI 作为入参，得到目标函数数组 chain
     const chain = middlewares.map(middleware => middleware(middlewareAPI))
+
+    // ! 改写原有的 dispatch：将 chain 中的函数按照顺序“组合”起来，调用最终组合出来的函数，传入 dispatch 作为入参
     dispatch = compose<typeof dispatch>(...chain)(store.dispatch)
 
+    // ! 返回一个新的 store 对象，这个 store 对象的 dispatch 已经被改写过了
     return {
       ...store,
       dispatch

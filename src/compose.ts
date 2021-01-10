@@ -44,14 +44,17 @@ export default function compose<R>(
 export default function compose<R>(...funcs: Function[]): (...args: any[]) => R
 
 export default function compose(...funcs: Function[]) {
+  // ! 处理数组为空的边界情况
   if (funcs.length === 0) {
     // infer the argument type so it is usable in inference down the line
     return <T>(arg: T) => arg
   }
 
+  // ! 若只有一个函数，也就谈不上组合，直接返回
   if (funcs.length === 1) {
     return funcs[0]
   }
 
+  // ! 若有多个函数，那么调用 reduce 方法来实现函数的组合
   return funcs.reduce((a, b) => (...args: any) => a(b(...args)))
 }
